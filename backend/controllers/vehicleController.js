@@ -2151,7 +2151,7 @@ export const getApprovedVehicles = async (req, res) => {
       auctionDateStart,
       auctionDateEnd,
       vehicleCondition,
-      locationId,
+      locationId,  
       make,
       model,
       series,
@@ -2167,14 +2167,14 @@ export const getApprovedVehicles = async (req, res) => {
       search,
       sortType,
     } = req.query;
-
+ 
     const defaultLimit = 100000000000;
     const defaultPage = 1;
     const entry = parseInt(req.query.entry) || defaultLimit;
     const page = parseInt(req.query.page) || defaultPage;
     const limit = Math.max(1, entry);
     const offset = (Math.max(1, page) - 1) * limit;
-
+ 
     let query = `
       SELECT v.*, c.cityName
       FROM tbl_vehicles v
@@ -2182,7 +2182,7 @@ export const getApprovedVehicles = async (req, res) => {
       WHERE v.vehicleStatus = 'Y'
       AND v.approval = 'Y'
     `;
-
+ 
     let countQuery = `
       SELECT COUNT(*) as total
       FROM tbl_vehicles v
@@ -2190,10 +2190,10 @@ export const getApprovedVehicles = async (req, res) => {
       WHERE v.vehicleStatus = 'Y'
       AND v.approval = 'Y'
     `;
-
+ 
     const params = [];
     const countParams = [];
-
+ 
     // Auction Date filters
     if (auctionDateStart && auctionDateEnd) {
       query += ` AND v.auctionDate BETWEEN ? AND ?`;
@@ -2206,7 +2206,7 @@ export const getApprovedVehicles = async (req, res) => {
       params.push(auctionDate);
       countParams.push(auctionDate);
     }
-
+ 
     // Filter by locationId (numeric only, now matched directly with JOIN)
     if (locationId) {
       query += ` AND v.locationId = ?`;
@@ -2214,7 +2214,7 @@ export const getApprovedVehicles = async (req, res) => {
       params.push(locationId);
       countParams.push(locationId);
     }
-
+ 
     if (maxPrice && minPrice) {
       query += ` AND v.buyNowPrice BETWEEN ? AND ?`;
       countQuery += ` AND v.buyNowPrice BETWEEN ? AND ?`;
@@ -2226,16 +2226,16 @@ export const getApprovedVehicles = async (req, res) => {
       params.push(buyNowPrice);
       countParams.push(buyNowPrice);
     }
-
+ 
     if (year) {
       query += ` AND v.year = ?`;
       countQuery += ` AND v.year = ?`;
       params.push(year);
       countParams.push(year);
     }
-
+ 
     if (search) {
-      query += ` AND (
+    query += ` AND (
       LOWER(v.make) LIKE LOWER(?) OR
       LOWER(v.model) LIKE LOWER(?) OR
       LOWER(v.series) LIKE LOWER(?) OR
@@ -2243,8 +2243,8 @@ export const getApprovedVehicles = async (req, res) => {
       LOWER(v.color) LIKE LOWER(?) OR
       LOWER(v.search) LIKE LOWER(?)
     )`;
-
-      countQuery += ` AND (
+ 
+    countQuery += ` AND (
       LOWER(v.make) LIKE LOWER(?) OR
       LOWER(v.model) LIKE LOWER(?) OR
       LOWER(v.series) LIKE LOWER(?) OR
@@ -2252,17 +2252,17 @@ export const getApprovedVehicles = async (req, res) => {
       LOWER(v.color) LIKE LOWER(?) OR
       LOWER(v.search) LIKE LOWER(?)
     )`;
-
-      const searchTerm = `%${search}%`.toLowerCase();
-      for (let i = 0; i < 6; i++) {
-        params.push(searchTerm);
-        countParams.push(searchTerm);
-      }
+ 
+    const searchTerm = `%${search}%`.toLowerCase();
+    for (let i = 0; i < 6; i++) {
+      params.push(searchTerm);
+      countParams.push(searchTerm);
     }
-
+  }
+ 
     let makeName = make;
     let modelName = model;
-
+ 
     if (make && !isNaN(make)) {
       const [rows] = await pool.query(
         `SELECT brandName FROM tbl_brands WHERE id = ?`,
@@ -2272,7 +2272,7 @@ export const getApprovedVehicles = async (req, res) => {
         makeName = rows[0].brandName;
       }
     }
-
+ 
     if (model && !isNaN(model)) {
       const [rows] = await pool.query(
         `SELECT modelName FROM tbl_model WHERE id = ?`,
@@ -2282,16 +2282,19 @@ export const getApprovedVehicles = async (req, res) => {
         modelName = rows[0].modelName;
       }
     }
-
+ 
     const filters = {
+      make: makeName,
+      model: modelName,
+      series,
       bodyStyle,
       engine,
       transmission,
       driveType,
       fuelType,
-      color,
+      color
     };
-
+ 
     Object.entries(filters).forEach(([key, value]) => {
       if (value) {
         query += ` AND v.${key} = ?`;
@@ -2300,14 +2303,16 @@ export const getApprovedVehicles = async (req, res) => {
         countParams.push(value);
       }
     });
-
+ 
+ 
+ 
     if (vehicleCondition && vehicleCondition !== "all") {
       query += ` AND v.vehicleCondition = ?`;
       countQuery += ` AND v.vehicleCondition = ?`;
       params.push(vehicleCondition);
       countParams.push(vehicleCondition);
     }
-
+ 
     // Sorting
     if (sortType) {
       if (sortType === "low") {
@@ -2322,18 +2327,18 @@ export const getApprovedVehicles = async (req, res) => {
     } else {
       query += ` ORDER BY v.id ASC`;
     }
-
+ 
     query += ` LIMIT ? OFFSET ?`;
     params.push(limit, offset);
-
+ 
     const [vehicles] = await pool.query(query, params);
     const [totalVehicles] = await pool.query(countQuery, countParams);
     const total = totalVehicles[0].total;
-
+ 
     const vehiclesWithImages = await Promise.all(
       vehicles.map(async (vehicle) => {
         const processedVehicle = { ...vehicle };
-
+ 
         try {
           processedVehicle.buyNowPrice = formatingPrice(vehicle.buyNowPrice);
         } catch {
@@ -2344,7 +2349,7 @@ export const getApprovedVehicles = async (req, res) => {
         } catch {
           processedVehicle.currentBid = null;
         }
-
+ 
         let imageUrls = [];
         if (processedVehicle.image) {
           try {
@@ -2365,15 +2370,16 @@ export const getApprovedVehicles = async (req, res) => {
             imageUrls = [];
           }
         }
-
+ 
         processedVehicle.images = imageUrls;
         delete processedVehicle.image;
-
+ 
         return processedVehicle;
       })
     );
-
+ 
     res.status(200).json(vehiclesWithImages);
+ 
   } catch (error) {
     console.error("Failed to fetch Vehicles:", error);
     return res.status(500).json({
