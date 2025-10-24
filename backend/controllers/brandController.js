@@ -67,78 +67,91 @@ export const getBrands = async (req, res) => {
 };
  
 export const addBrands = async (req, res) => {
-    try {
-        const { brandName, logo } = req.body;
+  try {
+    const { brandName, logo } = req.body;
  
-        const brandForComp = brandName.trim().toLowerCase();
+    const brandForComp = brandName.trim().toLowerCase();
  
-        const [checkExistingBrand] = await pool.query(
-          `SELECT * FROM tbl_brands WHERE LOWER(TRIM(brandName)) = ?`,
-          [brandForComp]
-        );
+    const [checkExistingBrand] = await pool.query(
+      `SELECT * FROM tbl_brands WHERE LOWER(TRIM(brandName)) = ?`,
+      [brandForComp]
+    );
  
-        if (checkExistingBrand.length > 0) {
-          return res.status(400).json({
-            status: 400,
-            message: "Brand with this name already exists",
-          });
-        }
- 
-        const uploadedLocalFilePaths = [];
-        let imagePublicId = null;
- 
-        const misingFields  = feilds.filter(field => !req.body[field]);
-        if(misingFields.lenght > 0){
-            res.status(400).send({
-                missingfeilds: `${misingFields.join(', ')}`
-            })
-        }
- 
-        if (req.file?.path) {
-              uploadedLocalFilePaths.push(req.file.path);
- 
-              try {
-                const { public_id } = await uploadPhoto(req.file.path, 'profile_pictures');
-                imagePublicId = public_id;
-       
-                try {
-                  await fs.access(req.file.path);
-                  await fs.unlink(req.file.path);
-                } catch (err) {
-                  console.warn(`Could not delete temp file ${req.file.path}:`, err.message);
-                }
-              } catch (uploadError) {
-                console.error("Cloudinary upload failed:", uploadError.message);
-              }
-            }
-       
- 
-        const [query] = await pool.query(`insert into tbl_brands (brandName, logo) values (?, ?)`,      //check here without array response
-            [brandName, imagePublicId ? JSON.stringify([imagePublicId]) : null]
-         );
- 
-         const insertedId = query.insertId;
-         console.log(insertedId);
- 
-         const [result] = await pool.query(`select * from tbl_brands where status = 'Y' and id = ?`,
-            [insertedId]
-         );
-         
-         // Attach full image URL to response (optional)
-        const responseUser = { ...result[0] };
-        responseUser.imageUrl = imagePublicId ? getPhotoUrl(imagePublicId, {
-          width: 400, crop: 'thumb', quality: 'auto'
-        }) : null;
-        delete responseUser.image; // hide public_id if you want
- 
-        res.status(201).json(responseUser);
- 
-        res.status(200).send({...result[0]})
-    } catch (error) {
-        console.error("Error adding brand:", error);
-        res.status(500).json({ error: "Internal server error" });
-    res.send(error.message);
+    if (checkExistingBrand.length > 0) {
+      return res.status(400).json({
+        status: 400,
+        message: "Brand with this name already exists",
+      });
     }
+ 
+    const uploadedLocalFilePaths = [];
+    let imagePublicId = null;
+ 
+    const fields = ["brandName"];
+ 
+    const misingFields = fields.filter((field) => !req.body[field]);
+    if (misingFields.lenght > 0) {
+      res.status(400).send({
+        missingfeilds: `${misingFields.join(", ")}`,
+      });
+    }
+ 
+    if (req.file?.path) {
+      uploadedLocalFilePaths.push(req.file.path);
+ 
+      try {
+        const { public_id } = await uploadPhoto(
+          req.file.path,
+          "profile_pictures"
+        );
+        imagePublicId = public_id;
+ 
+        try {
+          await fs.access(req.file.path);
+          await fs.unlink(req.file.path);
+        } catch (err) {
+          console.warn(
+            `Could not delete temp file ${req.file.path}:`,
+            err.message
+          );
+        }
+      } catch (uploadError) {
+        console.error("Cloudinary upload failed:", uploadError.message);
+      }
+    }
+ 
+    const [query] = await pool.query(
+      `insert into tbl_brands (brandName, logo) values (?, ?)`, //check here without array response
+      [brandName, imagePublicId ? JSON.stringify([imagePublicId]) : null]
+    );
+ 
+    const insertedId = query.insertId;
+    console.log(insertedId);
+ 
+    const [result] = await pool.query(
+      `select * from tbl_brands where status = 'Y' and id = ?`,
+      [insertedId]
+    );
+ 
+    // Attach full image URL to response (optional)
+    const responseUser = { ...result[0] };
+    responseUser.imageUrl = imagePublicId
+      ? getPhotoUrl(imagePublicId, {
+          width: 400,
+          crop: "thumb",
+          quality: "auto",
+        })
+      : null;
+    delete responseUser.image; // hide public_id if you want
+ 
+    res.status(201).json(responseUser);
+ 
+    res.status(200).send({ ...result[0] });
+  } catch (error) {
+    console.error("Error adding brand:", error);
+    res.status(500).json({ error: "Internal server error" });
+    res.send(error.message);
+  }
 };
  
 export const updateBrands = async (req, res) => {
