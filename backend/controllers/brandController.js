@@ -334,56 +334,75 @@ export const deleteBrand = async (req, res) => {
 export const addModel = async (req, res) => {
   try {
     const { brandId, modelName } = req.body;
-
+ 
     if (!modelName) {
       return res.status(400).json({
         status: 400,
         message: "modelName is required",
       });
     }
-
+ 
     const modelForComp = modelName.trim().toLowerCase();
-
-    const [checkExistingBrand] = await pool.query(
+ 
+    const [existingModels] = await pool.query(
       `SELECT * FROM tbl_model WHERE LOWER(TRIM(modelName)) = ?`,
       [modelForComp]
     );
-
-    if (checkExistingBrand.length > 0) {
+ 
+    if (existingModels.length > 0) {
       return res.status(400).json({
         status: 400,
         message: "Model with this name already exists",
       });
     }
-
-    const [query] = await pool.query(
+ 
+    const [insertResult] = await pool.query(
       "INSERT INTO tbl_model (brandId, modelName) VALUES (?, ?)",
       [brandId, modelName]
     );
-
-    const insertedId = query.insertId;
+ 
+    const insertedId = insertResult.insertId;
     console.log("Inserted model ID:", insertedId);
-
-    const [result] = await pool.query(
-      `select b.*, m.* from tbl_brands b
-        join tbl_model m on
-        b.id = m.brandId WHERE m.id = ?`,
+ 
+    const [rows] = await pool.query(
+      `SELECT b.brandName, m.modelName, m.id, m.brandId
+       FROM tbl_brands b
+       JOIN tbl_model m ON b.id = m.brandId
+       WHERE m.id = ?`,
       [insertedId]
     );
-
-    if (result.length === 0) {
+ 
+    if (rows.length === 0) {
       return res.status(404).json({
         status: 404,
         message: "Model not found or inactive",
       });
     }
-
+ 
+    const result = rows[0];
+ 
+    const querySearch = `${result.brandName} ${result.modelName}`.trim();
+    console.log("Query Search:", querySearch);
+ 
+    await pool.query(
+      `UPDATE tbl_model SET modelSearch = ? WHERE id = ?`,
+      [querySearch, insertedId]
+    );
+ 
     res.status(200).json({
-      ...result[0],
+      ...result,
+      modelSearch: querySearch,
+      status: 200,
+      message: "Model added successfully",
     });
+ 
   } catch (error) {
     console.error("Error adding Model:", error);
-    res.status(500).json({ status: 500, message: "Internal server error" });
+    res.status(500).json({
+      status: 500,
+      message: "Internal server error",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
   }
 };
 
@@ -393,9 +412,9 @@ export const getModels = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const offset = (page - 1) * limit;
     const search = req.query.search ? `%${req.query.search.trim()}%` : null;
-
+ 
     console.log("model api called");
-
+ 
     let query = `
       SELECT
         b.id AS brandId,
@@ -408,19 +427,21 @@ export const getModels = async (req, res) => {
       JOIN tbl_model m ON b.id = m.brandId
       WHERE m.status = 'Y'
     `;
+ 
     const params = [];
-
+   
     if (search) {
-      query += ` AND TRIM(LOWER(b.brandName)) LIKE ?`;
+      query += ` AND TRIM(LOWER(m.modelSearch)) LIKE ?`;
       params.push(search.toLowerCase());
-    }
-
+    };
+ 
     query += ` ORDER BY TRIM(LOWER(b.brandName)) ASC LIMIT ? OFFSET ?`;
     params.push(limit, offset);
-
+ 
     const [rows] = await pool.query(query, params);
-
+ 
     return res.status(200).json(rows);
+ 
   } catch (error) {
     console.error("Error fetching models:", error);
     res.status(500).json({ error: "Internal server error" });
@@ -559,67 +580,76 @@ export const deleteModel = async (req, res) => {
 export const addSeries = async (req, res) => {
   try {
     const { brandId, modelId, seriesName } = req.body;
-
+ 
     const missingFields = [];
     if (!brandId) missingFields.push("brandId");
     if (!modelId) missingFields.push("modelId");
     if (!seriesName) missingFields.push("seriesName");
-
+ 
     if (missingFields.length > 0) {
       return res.status(400).json({
         status: 400,
         message: `Missing fields: ${missingFields.join(", ")}`,
       });
     }
-
+ 
     const seriesForComp = seriesName.trim().toLowerCase();
-
-    // ✅ Duplicate check within the same model
+ 
     const [checkExistingSeries] = await pool.query(
-      `SELECT * FROM tbl_series 
+      `SELECT * FROM tbl_series
        WHERE LOWER(TRIM(seriesName)) = ? AND modelId = ?`,
       [seriesForComp, modelId]
     );
-
+ 
     if (checkExistingSeries.length > 0) {
       return res.status(400).json({
         status: 400,
         message: "Series with this name already exists for this model",
       });
     }
-
-    // Insert new series
-    const [query] = await pool.query(
+ 
+    const [insertResult] = await pool.query(
       "INSERT INTO tbl_series (brandId, modelId, seriesName, status) VALUES (?, ?, ?, 'Y')",
       [brandId, modelId, seriesName.trim()]
     );
-
-    const insertedId = query.insertId;
+ 
+    const insertedId = insertResult.insertId;
     console.log("Inserted series ID:", insertedId);
-
-    // Fetch inserted series with brand & model
-    const [result] = await pool.query(
-      `SELECT s.id AS seriesId, s.seriesName, s.status,
-              m.id AS modelId, m.modelName,
-              b.id AS brandId, b.brandName
+ 
+    const [rows] = await pool.query(
+      `SELECT
+         s.id AS seriesId, s.seriesName, s.status,
+         m.id AS modelId, m.modelName,
+         b.id AS brandId, b.brandName
        FROM tbl_series s
        JOIN tbl_model m ON s.modelId = m.id
        JOIN tbl_brands b ON m.brandId = b.id
        WHERE s.id = ?`,
       [insertedId]
     );
-
-    if (result.length === 0) {
+ 
+    if (rows.length === 0) {
       return res.status(404).json({
         status: 404,
         message: "Series not found or inactive",
       });
     }
-
+ 
+    const result = rows[0];
+ 
+    const querySearch = `${result.brandName} ${result.modelName} ${result.seriesName}`.trim();
+    console.log("Query Search:", querySearch);
+ 
+    await pool.query(
+      `UPDATE tbl_series SET seriesSearch = ? WHERE id = ?`,
+      [querySearch, insertedId]
+    );
+ 
     res.status(201).json({
-      success: true,
-      data: result[0],
+      ...result,
+        seriesSearch: querySearch,
     });
+ 
   } catch (error) {
     console.error("Error adding Series:", error);
     res.status(500).json({ status: 500, message: "Internal server error" });
@@ -656,12 +686,10 @@ export const getSeries = async (req, res) => {
     const limit = parseInt(req.query.limit) || 10000000;
     const page = parseInt(req.query.page) || 1;
     const offset = (page - 1) * limit;
-    const search = req.query.search
-      ? `%${req.query.search.trim().toLowerCase()}%`
-      : null;
-
+    const search = req.query.search ? `%${req.query.search.trim().toLowerCase()}%` : null;
+ 
     console.log("series api called");
-
+ 
     let query = `
       SELECT
         b.id AS brandId,
@@ -679,18 +707,19 @@ export const getSeries = async (req, res) => {
       WHERE s.status = 'Y'
     `;
     const params = [];
-
+ 
     if (search) {
-      query += ` AND TRIM(LOWER(b.brandName)) LIKE ?`;
+      query += ` AND TRIM(LOWER(s.seriesSearch)) LIKE ?`;
       params.push(search);
     }
-
+ 
     query += ` ORDER BY TRIM(LOWER(b.brandName)) ASC LIMIT ? OFFSET ?`;
     params.push(limit, offset);
-
+ 
     const [rows] = await pool.query(query, params);
-
+ 
     return res.status(200).json(rows);
+ 
   } catch (error) {
     console.error("Error fetching series:", error);
     res.status(500).json({ error: "Internal server error" });
