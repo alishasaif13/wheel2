@@ -16,28 +16,45 @@ export const getBrands = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const offset = (page - 1) * limit;
     const search = req.query.search ? `%${req.query.search}%` : null;
-
+ 
+    // 🔹 Base query — count only approved vehicles
     let query = `
-      SELECT *
-      FROM tbl_brands
-      WHERE status = 'Y'
+      SELECT
+        b.id,
+        b.brandName,
+        b.logo,
+        b.status,
+        COUNT(v.id) AS vehicleCount
+      FROM tbl_brands b
+      INNER JOIN tbl_vehicles v
+        ON v.make COLLATE utf8mb4_unicode_ci = b.brandName COLLATE utf8mb4_unicode_ci
+      WHERE b.status = 'Y'
+        AND v.approval = 'Y'
     `;
+ 
     const params = [];
-
-    // Add search condition if provided
+ 
+    // 🔍 Optional search filter
     if (search) {
-      query += ` AND brandName LIKE ? `;
+      query += ` AND b.brandName LIKE ?`;
       params.push(search);
     }
-
-    query += ` ORDER BY brandName ASC LIMIT ? OFFSET ?`;
+ 
+    query += `
+      GROUP BY b.id
+      HAVING vehicleCount > 0
+      ORDER BY b.brandName ASC
+      LIMIT ? OFFSET ?
+    `;
+ 
     params.push(limit, offset);
-
+ 
     const [rows] = await pool.query(query, params);
-
+ 
+    // 🧩 Format response and safely parse logo
     const brands = rows.map((brand) => {
       let logoUrl = null;
-
+ 
       try {
         if (brand.logo) {
           const parsed = JSON.parse(brand.logo);
@@ -52,20 +69,22 @@ export const getBrands = async (req, res) => {
       } catch (err) {
         console.warn(`Error parsing logo for brand ${brand.id}:`, err.message);
       }
-
+ 
       return {
-        ...brand,
+        id: brand.id,
+        brandName: brand.brandName,
         logo: logoUrl,
+        status: brand.status,
+        vehicleCount: brand.vehicleCount || 0,
       };
     });
-
+ 
     return res.status(200).json(brands);
   } catch (error) {
     console.error("Error fetching brands:", error);
-    res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: "Internal server error" });
   }
 };
- 
 export const addBrands = async (req, res) => {
   try {
     const { brandName, logo } = req.body;
@@ -451,22 +470,39 @@ export const getModels = async (req, res) => {
 export const getModelById = async (req, res) => {
   try {
     const id = req.params.id;
-
-    console.log(id);
-
+ 
     const [rows] = await pool.query(
-      `select b.*, m.* from tbl_brands b
-        join tbl_model m on 
-        b.id = m.brandId WHERE m.status = 'Y' and b.id = ?`,
+      `
+      SELECT
+        m.id AS modelId,
+        m.modelName,
+        m.status,
+        b.id AS brandId,
+        b.brandName,
+        COUNT(v.id) AS vehicleCount
+      FROM tbl_model m
+      INNER JOIN tbl_brands b
+        ON m.brandId = b.id
+      LEFT JOIN tbl_vehicles v
+        ON v.model COLLATE utf8mb4_unicode_ci = m.modelName COLLATE utf8mb4_unicode_ci
+        AND v.make COLLATE utf8mb4_unicode_ci = b.brandName COLLATE utf8mb4_unicode_ci
+        AND v.approval = 'Y'
+      WHERE m.status = 'Y'
+        AND b.id = ?
+      GROUP BY m.id
+      HAVING vehicleCount > 0
+      ORDER BY m.modelName ASC
+      `,
       [id]
     );
-
+ 
     return res.status(200).json(rows);
   } catch (error) {
-    console.error("Error fetching brands:", error);
+    console.error("Error fetching models:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 };
+ 
 
 export const getBrandById = async (req, res) => {
   try {
