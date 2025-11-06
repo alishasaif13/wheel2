@@ -15,6 +15,36 @@ export const getContactUs = async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 };
+export const subscribeUser = async (req, res) => {
+  try {
+  const { email } = req.body;
+    if (!email) {
+      return res.status(400).send({ message: "Bad Request! Email is required." });
+    }
+ 
+    const [addEmail] = await pool.query(
+      `INSERT INTO tbl_subscribe (email) VALUES (?)`,
+      [email]
+    );
+ 
+    const insertID = addEmail.insertId;
+ 
+    if (!insertID) {
+      return res.status(404).send({ message: "Failed to add Email!" });
+    }
+ 
+    const [getLastEmail] = await pool.query(
+      `SELECT * FROM tbl_subscribe WHERE id = ?`,
+      [insertID]
+    );
+ 
+    res.status(200).send(getLastEmail[0]);
+ 
+  } catch (error) {
+    console.error("Error updating seriesSearch:", error);
+    return res.status(500).json({ message: "Internal Server Error!" });
+  }
+};
 
 export const updateContactUs = async (req, res) => {
   try {
