@@ -73,6 +73,7 @@ export default (app) => {
  
   app.get("/customer/myOffers", myOffers);
 app.post('/subscribe', subscribeUser);
+app.get('/getSubscribeUser', getSubscribeUser);
   //start bidding
   app.post("/customer/startBidding", startBidding);
 

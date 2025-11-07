@@ -45,6 +45,16 @@ export const subscribeUser = async (req, res) => {
     return res.status(500).json({ message: "Internal Server Error!" });
   }
 };
+export const getSubscribeUser = async (req, res) => {
+  try{
+    const [rows] = await pool.query(`select * from tbl_subscribe where status = 'Y'`);
+ 
+    res.status(200).send(rows);
+  }catch(error){
+    console.error("Error updating seriesSearch:", error);
+    return res.status(500).json({ message: "Internal Server Error!" });
+  }
+};
 
 export const updateContactUs = async (req, res) => {
   try {
