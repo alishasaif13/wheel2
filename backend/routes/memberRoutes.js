@@ -49,7 +49,9 @@ import {
   becomePartnerForm,
   contactFrom,
   deleteContactUs,
+  getSubscribeUser,
   giveSuggestion,
+  subscribeUser,
   updateContactUs,
 } from "../controllers/contactUsController.js";
 import {
@@ -72,8 +74,11 @@ export default (app) => {
   app.get("/customer/lotsLost", lotsLost); 
  
   app.get("/customer/myOffers", myOffers);
+  
 app.post('/subscribe', subscribeUser);
+
 app.get('/getSubscribeUser', getSubscribeUser);
+
   //start bidding
   app.post("/customer/startBidding", startBidding);
 
