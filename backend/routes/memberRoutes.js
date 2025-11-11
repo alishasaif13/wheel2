@@ -74,7 +74,7 @@ export default (app) => {
   app.get("/customer/lotsLost", lotsLost); 
  
   app.get("/customer/myOffers", myOffers);
-  
+
 app.post('/subscribe', subscribeUser);
 
 app.get('/getSubscribeUser', getSubscribeUser);
